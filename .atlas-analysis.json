@@ -1,0 +1,81 @@
+{
+  "projectType": "saas",
+  "projectName": "SlugShare",
+  "projectDescription": "A Next.js application for UCSC students to share dining hall points with each other.",
+  "theme": "almond",
+  "primaryColor": "#003c6c",
+  "lightColor": "#fdc700",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Getting Started",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Setup",
+            "pages": ["setup/installation", "setup/environment", "setup/database"]
+          }
+        ]
+      },
+      {
+        "tab": "Features",
+        "groups": [
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/authentication",
+              "features/points-management",
+              "features/requests",
+              "features/notifications"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "features/donation-calculator",
+              "features/locations"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Technical Reference",
+            "pages": [
+              "reference/database-schema",
+              "reference/api-routes",
+              "reference/project-structure"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "User authentication with NextAuth.js (Google OAuth and credentials)",
+    "Points balance management and tracking",
+    "Request creation for dining hall points at specific UCSC locations",
+    "Accept/decline requests with atomic point transfers",
+    "Real-time notifications system",
+    "Donation calculator for planning point donations",
+    "Support for all UCSC dining halls and cafes"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/signin - Sign in with credentials or Google",
+    "GET /api/points - Get current user's points balance",
+    "POST /api/points - Update points balance",
+    "GET /api/requests - Fetch all requests",
+    "POST /api/requests - Create a new request",
+    "POST /api/requests/[id]/accept - Accept a request and transfer points",
+    "POST /api/requests/[id]/decline - Decline a request",
+    "DELETE /api/requests/[id] - Delete a request",
+    "GET /api/notifications - Get user notifications",
+    "GET /api/user - Get current user information"
+  ]
+}
