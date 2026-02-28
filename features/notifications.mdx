@@ -259,6 +259,75 @@ This can be shown in the navigation bar or notification icon to alert users to n
   </Step>
 </Steps>
 
+## Viewing Notifications in the Inbox
+
+SlugShare provides a dedicated inbox page at `/inbox` where users can view and manage all their notifications.
+
+### Inbox Features
+
+<Steps>
+  <Step title="View all notifications">
+    The inbox displays all notifications ordered by most recent first, with unread notifications highlighted with a visual indicator.
+  </Step>
+
+  <Step title="Unread count badge">
+    The inbox header shows the number of unread notifications:
+    
+    ```typescript
+    const unreadCount = notifications.filter((n) => !n.read).length;
+    ```
+  </Step>
+
+  <Step title="Mark as read">
+    Each unread notification has a "Mark as Read" button that calls the PATCH endpoint:
+    
+    ```typescript app/inbox/page.tsx
+    const markAsRead = async (notificationId: string) => {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId, read: true }),
+      });
+      
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notif.id === notificationId ? { ...notif, read: true } : notif
+        )
+      );
+    };
+    ```
+  </Step>
+
+  <Step title="Mark all as read">
+    The inbox provides a "Mark All as Read" button that marks all unread notifications as read in one action.
+  </Step>
+
+  <Step title="Refresh notifications">
+    Users can manually refresh the notification list to check for new updates.
+  </Step>
+</Steps>
+
+### Accessing the Inbox
+
+Users can access the inbox from the dashboard navigation. The inbox page fetches all notifications on load and displays them in a card-based layout.
+
+```typescript app/inbox/page.tsx
+useEffect(() => {
+  fetchNotifications();
+}, []);
+
+const fetchNotifications = async () => {
+  const response = await fetch("/api/notifications");
+  const data = await response.json();
+  setNotifications(data);
+};
+```
+
+<Note>
+  The inbox page uses client-side polling to check for new notifications every 30 seconds, keeping users informed of new request updates without requiring a page refresh.
+</Note>
+
 ## Future Enhancements
 
 Potential improvements to the notification system:
