@@ -1,0 +1,191 @@
+---
+title: Authentication
+description: Sign in with Google OAuth or email credentials using NextAuth.js
+---
+
+SlugShare uses NextAuth.js v5 to handle user authentication. Students can sign in using their Google account (via OAuth) or with email and password credentials.
+
+## Authentication Methods
+
+<Tabs>
+  <Tab title="Google OAuth">
+    The recommended sign-in method for UCSC students. Google OAuth provides a secure, passwordless authentication experience.
+
+    ```typescript app/auth.config.ts
+    import Google from "next-auth/providers/google";
+
+    providers: [
+      Google({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      })
+    ]
+    ```
+
+    **Benefits:**
+    - No password to remember
+    - Automatic account creation on first sign-in
+    - Uses UCSC Google Workspace credentials
+  </Tab>
+
+  <Tab title="Email & Password">
+    Students can also create accounts with email and password credentials.
+
+    ```typescript app/auth.config.ts
+    import Credentials from "next-auth/providers/credentials";
+
+    Credentials({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email as string },
+        });
+
+        if (!user) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name || undefined,
+        };
+      },
+    })
+    ```
+
+    <Warning>
+      The current implementation does not include password hashing. Add bcrypt password verification before deploying to production.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Sign In Flow
+
+<Steps>
+  <Step title="Navigate to login page">
+    Users visit `/auth/login` to access the sign-in form.
+
+    The auth configuration automatically redirects authenticated users:
+
+    ```typescript auth.config.ts
+    pages: {
+      signIn: "/auth/login",
+      signOut: "/auth/login",
+    }
+    ```
+  </Step>
+
+  <Step title="Choose authentication method">
+    Users can either:
+    - Click "Sign in with Google" for OAuth authentication
+    - Enter email and password for credentials-based login
+  </Step>
+
+  <Step title="Authentication verification">
+    NextAuth.js validates the credentials or OAuth token and creates a session.
+
+    ```typescript auth.config.ts
+    callbacks: {
+      async jwt({ token, user }) {
+        if (user) {
+          token.id = user.id;
+        }
+        return token;
+      },
+      async session({ session, token }) {
+        if (session.user) {
+          session.user.id = token.id as string;
+        }
+        return session;
+      },
+    }
+    ```
+  </Step>
+
+  <Step title="Redirect to dashboard">
+    After successful authentication, users are redirected to `/dashboard` where they can view their points balance and create requests.
+  </Step>
+</Steps>
+
+## Protected Routes
+
+SlugShare uses NextAuth.js middleware to protect authenticated routes. The dashboard and all request-related pages require authentication.
+
+```typescript auth.config.ts
+callbacks: {
+  authorized({ auth, request: { nextUrl } }) {
+    const isLoggedIn = !!auth?.user;
+    const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
+    
+    if (isOnDashboard) {
+      if (isLoggedIn) return true;
+      return false; // Redirect unauthenticated users to login page
+    } else if (isLoggedIn && nextUrl.pathname === "/auth/login") {
+      return Response.redirect(new URL("/dashboard", nextUrl));
+    }
+    return true;
+  },
+}
+```
+
+### Server-Side Authentication Check
+
+API routes verify authentication using the `getCurrentUser()` helper:
+
+```typescript app/api/requests/route.ts
+import { getCurrentUser } from "@/lib/auth";
+
+export async function GET() {
+  const user = await getCurrentUser();
+
+  if (!user || !user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Fetch requests for authenticated user
+}
+```
+
+## Session Management
+
+SlugShare uses JWT-based sessions for fast, stateless authentication:
+
+```typescript auth.ts
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
+  secret: process.env.AUTH_SECRET,
+  ...authConfig,
+});
+```
+
+<Note>
+  JWT sessions are cached in the token. User information does not automatically update until the next sign-in.
+</Note>
+
+## Sign Out
+
+Users can sign out from any page. The sign-out action clears the session and redirects to the login page:
+
+```typescript
+import { signOut } from "@/auth";
+
+await signOut({ redirectTo: "/auth/login" });
+```
+
+## Environment Variables
+
+Required environment variables for authentication:
+
+```env .env
+AUTH_SECRET="your-secret-key"  # Generate with: openssl rand -base64 32
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+```

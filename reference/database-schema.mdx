@@ -1,0 +1,429 @@
+---
+title: Database Schema
+description: Complete database schema with all models and relationships
+---
+
+SlugShare uses PostgreSQL with Prisma ORM. The schema includes NextAuth.js authentication tables and custom models for points tracking and request management.
+
+## Database Provider
+
+```prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+```
+
+## Models Overview
+
+The database consists of 7 models:
+- **NextAuth.js Models**: User, Account, Session, VerificationToken
+- **Application Models**: Points, Request, Notification
+
+---
+
+## User
+
+Stores user account information and serves as the central model connecting all other entities.
+
+```prisma
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String         @unique
+  emailVerified DateTime?
+  phone         String?
+  image         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  points        Points?
+  requests      Request[]      @relation("Requester")
+  donations     Request[]      @relation("Donor")
+  notifications Notification[]
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier (CUID format)
+</ParamField>
+
+<ParamField path="name" type="string">
+  User's display name
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  User's email address (unique)
+</ParamField>
+
+<ParamField path="emailVerified" type="DateTime">
+  Timestamp when email was verified
+</ParamField>
+
+<ParamField path="phone" type="string">
+  User's phone number
+</ParamField>
+
+<ParamField path="image" type="string">
+  Profile image URL
+</ParamField>
+
+<ParamField path="createdAt" type="DateTime" required>
+  Account creation timestamp (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="DateTime" required>
+  Last update timestamp (auto-updated)
+</ParamField>
+
+### Relations
+
+- **accounts**: OAuth accounts linked to this user
+- **sessions**: Active sessions for this user
+- **points**: One-to-one relationship with Points model
+- **requests**: Requests created by this user (as requester)
+- **donations**: Requests where this user is the donor
+- **notifications**: Notifications for this user
+
+---
+
+## Account
+
+Stores OAuth provider account information for NextAuth.js authentication.
+
+```prisma
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier
+</ParamField>
+
+<ParamField path="userId" type="string" required>
+  Foreign key to User model
+</ParamField>
+
+<ParamField path="provider" type="string" required>
+  OAuth provider name (e.g., "google")
+</ParamField>
+
+<ParamField path="providerAccountId" type="string" required>
+  User's ID from the OAuth provider
+</ParamField>
+
+### Constraints
+
+- **Cascade Delete**: When a user is deleted, all their accounts are deleted
+- **Unique**: Combination of `provider` and `providerAccountId` must be unique
+
+---
+
+## Session
+
+Stores active user sessions for NextAuth.js.
+
+```prisma
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier
+</ParamField>
+
+<ParamField path="sessionToken" type="string" required>
+  Unique session token (used in cookies)
+</ParamField>
+
+<ParamField path="userId" type="string" required>
+  Foreign key to User model
+</ParamField>
+
+<ParamField path="expires" type="DateTime" required>
+  Session expiration timestamp
+</ParamField>
+
+---
+
+## VerificationToken
+
+Stores email verification tokens for NextAuth.js.
+
+```prisma
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+```
+
+### Fields
+
+<ParamField path="identifier" type="string" required>
+  Email address or user identifier
+</ParamField>
+
+<ParamField path="token" type="string" required>
+  Unique verification token
+</ParamField>
+
+<ParamField path="expires" type="DateTime" required>
+  Token expiration timestamp
+</ParamField>
+
+---
+
+## Points
+
+Tracks dining hall points balance for each user. One-to-one relationship with User.
+
+```prisma
+model Points {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier
+</ParamField>
+
+<ParamField path="userId" type="string" required>
+  Foreign key to User model (unique)
+</ParamField>
+
+<ParamField path="balance" type="integer" required>
+  Current points balance (default: 0)
+</ParamField>
+
+<ParamField path="updatedAt" type="DateTime" required>
+  Last update timestamp (auto-updated)
+</ParamField>
+
+### Important Notes
+
+<Note>
+  Points records don't exist by default. Always use `upsert` to handle first access:
+  ```typescript
+  const points = await prisma.points.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, balance: 0 },
+  });
+  ```
+</Note>
+
+---
+
+## Request
+
+Tracks point-sharing requests between users.
+
+```prisma
+model Request {
+  id             String   @id @default(cuid())
+  requesterId    String
+  donorId        String?
+  location       String
+  pointsRequested Int
+  status         String   @default("pending")
+  message        String?
+  requester      User     @relation("Requester", fields: [requesterId], references: [id])
+  donor          User?    @relation("Donor", fields: [donorId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier
+</ParamField>
+
+<ParamField path="requesterId" type="string" required>
+  Foreign key to User model (user requesting points)
+</ParamField>
+
+<ParamField path="donorId" type="string">
+  Foreign key to User model (user donating points, null until accepted/declined)
+</ParamField>
+
+<ParamField path="location" type="string" required>
+  UCSC dining hall location (e.g., "Cowell/Stevenson", "Crown/Merrill")
+</ParamField>
+
+<ParamField path="pointsRequested" type="integer" required>
+  Number of points requested
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Request status: `pending`, `accepted`, or `declined` (default: `pending`)
+</ParamField>
+
+<ParamField path="message" type="string">
+  Optional message from requester
+</ParamField>
+
+<ParamField path="createdAt" type="DateTime" required>
+  Request creation timestamp (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="DateTime" required>
+  Last update timestamp (auto-updated)
+</ParamField>
+
+### Relations
+
+- **requester**: User who created the request
+- **donor**: User who accepted/declined the request (nullable)
+
+### Status Values
+
+<Expandable title="Request Status Values">
+  - **pending**: Request is waiting for a donor
+  - **accepted**: Request has been accepted and points transferred
+  - **declined**: Request has been declined by a donor
+</Expandable>
+
+---
+
+## Notification
+
+Stores notifications for users about request actions.
+
+```prisma
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+### Fields
+
+<ParamField path="id" type="string" required>
+  Unique identifier
+</ParamField>
+
+<ParamField path="userId" type="string" required>
+  Foreign key to User model
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  Notification type (e.g., `request_accepted`, `request_declined`, `request_accepted_by_you`)
+</ParamField>
+
+<ParamField path="message" type="string" required>
+  Human-readable notification message
+</ParamField>
+
+<ParamField path="read" type="boolean" required>
+  Whether notification has been read (default: `false`)
+</ParamField>
+
+<ParamField path="createdAt" type="DateTime" required>
+  Notification creation timestamp (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="DateTime" required>
+  Last update timestamp (auto-updated)
+</ParamField>
+
+### Notification Types
+
+<Expandable title="Notification Type Values">
+  - **request_accepted**: Sent to requester when their request is accepted
+  - **request_declined**: Sent to requester when their request is declined
+  - **request_accepted_by_you**: Sent to donor as confirmation of acceptance
+</Expandable>
+
+---
+
+## Relationships Diagram
+
+```
+User
+├── accounts (1:N) → Account
+├── sessions (1:N) → Session
+├── points (1:1) → Points
+├── requests (1:N) → Request (as requester)
+├── donations (1:N) → Request (as donor)
+└── notifications (1:N) → Notification
+
+Request
+├── requester (N:1) → User
+└── donor (N:1) → User (nullable)
+```
+
+---
+
+## Database Commands
+
+### Run Migrations
+
+```bash
+npx prisma migrate dev
+```
+
+### Generate Prisma Client
+
+```bash
+npx prisma generate
+```
+
+### Open Prisma Studio
+
+```bash
+npx prisma studio
+```
+
+### Push Schema (without migration)
+
+```bash
+npx prisma db push
+```
+
+<Warning>
+  Always run `npx prisma generate` after modifying `prisma/schema.prisma` to update TypeScript types.
+</Warning>

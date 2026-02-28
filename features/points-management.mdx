@@ -1,0 +1,230 @@
+---
+title: Points Management
+description: Track and update dining hall points balances for users
+---
+
+SlugShare uses a simple points system to track each user's dining hall points balance. Users can manually update their balance, and points are automatically transferred when requests are accepted.
+
+## Points Model
+
+Each user has a one-to-one relationship with a Points record in the database:
+
+```prisma prisma/schema.prisma
+model Points {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+}
+```
+
+<Note>
+  Points records are created on-demand using the upsert pattern. If a user doesn't have a Points record yet, one is automatically created when they access their dashboard or update their balance.
+</Note>
+
+## Viewing Points Balance
+
+Users can view their current points balance on the dashboard:
+
+<Steps>
+  <Step title="Navigate to dashboard">
+    After signing in, users are automatically redirected to `/dashboard`.
+  </Step>
+
+  <Step title="Dashboard fetches points balance">
+    The dashboard page uses the upsert pattern to get or create the user's Points record:
+
+    ```typescript app/dashboard/page.tsx
+    const points = await prisma.points.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+        balance: 0,
+      },
+    });
+    ```
+  </Step>
+
+  <Step title="Display balance">
+    The current balance is displayed prominently in a card:
+
+    ```tsx
+    <CardContent className="space-y-4">
+      <p className="text-4xl font-bold text-blue-600">{points.balance}</p>
+      <UpdatePointsForm currentBalance={points.balance} />
+    </CardContent>
+    ```
+  </Step>
+</Steps>
+
+## Updating Points Balance
+
+Users can manually update their dining hall points balance to reflect their actual account:
+
+<Steps>
+  <Step title="Enter new balance">
+    Users enter their current points balance in the update form on the dashboard.
+
+    <Warning>
+      The balance must be a non-negative number. Negative balances are not allowed.
+    </Warning>
+  </Step>
+
+  <Step title="Submit to API">
+    The form sends a POST request to `/api/points` with the new balance:
+
+    ```typescript
+    const response = await fetch("/api/points", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ balance: newBalance }),
+    });
+    ```
+  </Step>
+
+  <Step title="Validate and update">
+    The API validates the balance and updates the Points record:
+
+    ```typescript app/api/points/route.ts
+    export async function POST(request: NextRequest) {
+      const user = await getCurrentUser();
+      if (!user || !user.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const { balance } = await request.json();
+
+      if (typeof balance !== "number" || balance < 0) {
+        return NextResponse.json(
+          { error: "Balance must be a non-negative number" },
+          { status: 400 }
+        );
+      }
+
+      const points = await prisma.points.upsert({
+        where: { userId: user.id },
+        update: { balance },
+        create: { userId: user.id, balance },
+      });
+
+      return NextResponse.json({ balance: points.balance });
+    }
+    ```
+  </Step>
+
+  <Step title="Refresh dashboard">
+    After successful update, the dashboard refreshes to show the new balance.
+  </Step>
+</Steps>
+
+## Automatic Points Transfer
+
+When a user accepts a request to donate points, SlugShare automatically transfers points between accounts using a database transaction:
+
+```typescript app/api/requests/[id]/accept/route.ts
+await prisma.$transaction([
+  // Decrease donor's balance
+  prisma.points.update({
+    where: { userId: user.id },
+    data: {
+      balance: {
+        decrement: request.pointsRequested,
+      },
+    },
+  }),
+  // Increase requester's balance
+  prisma.points.update({
+    where: { userId: request.requesterId },
+    data: {
+      balance: {
+        increment: request.pointsRequested,
+      },
+    },
+  }),
+  // Update request status
+  prisma.request.update({
+    where: { id: requestId },
+    data: {
+      status: "accepted",
+      donorId: user.id,
+    },
+  }),
+]);
+```
+
+<Note>
+  Using `prisma.$transaction()` ensures atomicity. If any operation fails, all changes are rolled back to prevent data inconsistency.
+</Note>
+
+## Balance Validation
+
+Before accepting a request, SlugShare validates that the donor has sufficient points:
+
+```typescript lib/validation.ts
+export function validateAcceptRequest(
+  request: { pointsRequested: number } | null,
+  userId: string,
+  donorBalance: number
+): ValidationResult {
+  if (donorBalance < request.pointsRequested) {
+    return { 
+      valid: false, 
+      error: "Insufficient points balance", 
+      status: 400 
+    };
+  }
+  return { valid: true };
+}
+```
+
+<Warning>
+  Users cannot accept requests if they don't have enough points. The system prevents overdrafts to maintain accurate balances.
+</Warning>
+
+## Fetching Points via API
+
+To retrieve a user's current points balance programmatically:
+
+```typescript
+const response = await fetch("/api/points");
+const { balance } = await response.json();
+```
+
+The GET endpoint returns the current balance:
+
+```typescript app/api/points/route.ts
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user || !user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const points = await prisma.points.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, balance: 0 },
+  });
+
+  return NextResponse.json({ balance: points.balance });
+}
+```
+
+## Upsert Pattern
+
+SlugShare consistently uses the upsert pattern to handle Points records. This prevents errors when a user's Points record doesn't exist:
+
+```typescript
+const points = await prisma.points.upsert({
+  where: { userId: user.id },
+  update: {},  // or { balance: newBalance } to update
+  create: { userId: user.id, balance: 0 },
+});
+```
+
+**Why upsert?**
+- Points records are created lazily (only when needed)
+- Prevents "record not found" errors
+- Handles first-time users automatically
+- Simplifies API logic

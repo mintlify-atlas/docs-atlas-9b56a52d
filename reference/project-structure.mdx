@@ -1,0 +1,545 @@
+---
+title: Project Structure
+description: Project directory structure and key files
+---
+
+SlugShare is built with Next.js 16.1.1 using the App Router architecture. This guide explains the project organization and key files.
+
+## Directory Overview
+
+```
+webserver/
+├── app/                    # Next.js App Router pages and API routes
+├── components/             # React components
+├── lib/                    # Utility functions and configurations
+├── prisma/                 # Database schema and migrations
+├── __tests__/              # Test files
+├── public/                 # Static assets
+└── Configuration files
+```
+
+---
+
+## App Directory
+
+The `app/` directory contains all pages, layouts, and API routes using Next.js App Router.
+
+### Pages Structure
+
+```
+app/
+├── page.tsx                # Home page (root route: /)
+├── layout.tsx              # Root layout wrapper
+├── auth/
+│   ├── login/
+│   │   └── page.tsx        # Login page (/auth/login)
+│   └── signup/
+│       └── page.tsx        # Sign up page (/auth/signup)
+├── dashboard/
+│   └── page.tsx            # Dashboard page (/dashboard)
+└── requests/
+    ├── page.tsx            # All requests page (/requests)
+    └── create/
+        └── page.tsx        # Create request page (/requests/create)
+```
+
+#### Key Pages
+
+<Expandable title="/ (Home)">
+  Landing page that redirects unauthenticated users to login.
+</Expandable>
+
+<Expandable title="/auth/login">
+  Login page with Google OAuth and credentials-based authentication.
+</Expandable>
+
+<Expandable title="/auth/signup">
+  Sign up page for creating new accounts.
+</Expandable>
+
+<Expandable title="/dashboard">
+  Protected dashboard showing user's points balance and update form.
+</Expandable>
+
+<Expandable title="/requests">
+  Shows all requests split into "My Requests" and "Other Requests" tabs.
+</Expandable>
+
+<Expandable title="/requests/create">
+  Form for creating new point-sharing requests.
+</Expandable>
+
+### API Routes Structure
+
+```
+app/api/
+├── auth/
+│   └── [...nextauth]/
+│       └── route.ts        # NextAuth.js handler
+├── user/
+│   └── route.ts            # GET, PATCH user info
+├── points/
+│   └── route.ts            # GET, POST points balance
+├── notifications/
+│   └── route.ts            # GET, PATCH notifications
+└── requests/
+    ├── route.ts            # GET all, POST create
+    └── [id]/
+        ├── route.ts        # DELETE request
+        ├── accept/
+        │   └── route.ts    # POST accept request
+        └── decline/
+            └── route.ts    # POST decline request
+```
+
+#### API Route Pattern
+
+All API routes follow this structure:
+
+```typescript
+import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export async function GET() {
+  // 1. Check authentication
+  const user = await getCurrentUser();
+  if (!user || !user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 2. Perform database operations
+  // 3. Return JSON response
+}
+```
+
+---
+
+## Components Directory
+
+React components organized by functionality.
+
+```
+components/
+├── ui/                     # shadcn/ui components
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── input.tsx
+│   ├── label.tsx
+│   ├── tabs.tsx
+│   └── ...                 # Other UI primitives
+├── providers.tsx           # Session provider wrapper
+└── UpdatePointsForm.tsx    # Points update form component
+```
+
+### UI Components
+
+All components in `components/ui/` are from [shadcn/ui](https://ui.shadcn.com/), built on:
+- **Radix UI** primitives
+- **Tailwind CSS v4** for styling
+- **class-variance-authority** for variants
+
+### Custom Components
+
+<Expandable title="providers.tsx">
+  Wraps the app with `SessionProvider` from NextAuth.js to provide authentication context.
+</Expandable>
+
+<Expandable title="UpdatePointsForm.tsx">
+  Client component for updating points balance. Handles form submission and API calls.
+</Expandable>
+
+---
+
+## Lib Directory
+
+Utility functions, configuration, and shared logic.
+
+```
+lib/
+├── auth.ts                 # Authentication utilities
+├── prisma.ts               # Prisma client singleton
+├── validation.ts           # Request validation functions
+├── locations.ts            # UCSC dining locations
+└── utils.ts                # General utility functions
+```
+
+### Key Files
+
+#### auth.ts
+
+Exports `getCurrentUser()` for server-side authentication checks.
+
+```typescript
+import { auth } from "@/auth";
+
+export async function getCurrentUser() {
+  const session = await auth();
+  return session?.user;
+}
+```
+
+Used in:
+- All API routes
+- Server Components requiring authentication
+
+#### prisma.ts
+
+Prisma client singleton to prevent connection pool exhaustion in development.
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+```
+
+#### validation.ts
+
+Centralized validation logic for requests.
+
+<Expandable title="validateCreateRequest()">
+  Validates location and points when creating a request.
+  
+  Returns: `{ valid: true }` or `{ valid: false; error: string; status: number }`
+</Expandable>
+
+<Expandable title="validateAcceptRequest()">
+  Validates request status, ownership, and donor balance before accepting.
+  
+  Returns: `{ valid: true }` or `{ valid: false; error: string; status: number }`
+</Expandable>
+
+<Expandable title="validateDeleteRequest()">
+  Validates request deletion permissions and status.
+  
+  Returns: `{ valid: true }` or `{ valid: false; error: string; status: number }`
+</Expandable>
+
+#### locations.ts
+
+Defines UCSC dining hall locations as a typed constant.
+
+```typescript
+export const LOCATIONS = [
+  "Cowell/Stevenson",
+  "Crown/Merrill",
+  "Porter/Kresge",
+  "Rachel Carson/Oakes",
+  "Nine/Ten",
+] as const;
+
+export type Location = typeof LOCATIONS[number];
+```
+
+#### utils.ts
+
+General utility functions, including `cn()` for merging Tailwind classes.
+
+```typescript
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+---
+
+## Prisma Directory
+
+Database schema and migrations.
+
+```
+prisma/
+├── schema.prisma           # Database schema definition
+└── migrations/             # Migration history
+```
+
+### schema.prisma
+
+Defines all database models, relations, and configuration.
+
+<Expandable title="Key Sections">
+  - **datasource**: PostgreSQL connection
+  - **generator**: Prisma Client configuration
+  - **NextAuth models**: User, Account, Session, VerificationToken
+  - **Application models**: Points, Request, Notification
+</Expandable>
+
+See [Database Schema](/reference/database-schema) for detailed documentation.
+
+---
+
+## Root Configuration Files
+
+### Authentication Configuration
+
+```
+auth.config.ts              # NextAuth providers and callbacks
+auth.ts                     # NextAuth instance with Prisma adapter
+```
+
+#### auth.config.ts
+
+Defines authentication providers and configuration.
+
+```typescript
+import type { NextAuthConfig } from "next-auth";
+import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+
+export default {
+  providers: [Google, Credentials],
+  // callbacks, pages, session config
+} satisfies NextAuthConfig;
+```
+
+#### auth.ts
+
+Creates NextAuth instance with Prisma adapter.
+
+```typescript
+import NextAuth from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import authConfig from "./auth.config";
+import { prisma } from "@/lib/prisma";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  ...authConfig,
+});
+```
+
+### Next.js Configuration
+
+```
+next.config.ts              # Next.js configuration
+```
+
+Minimal configuration for Next.js 16.
+
+### TypeScript Configuration
+
+```
+tsconfig.json               # TypeScript compiler options
+```
+
+Configured with:
+- Path aliases (`@/*` → `./`)
+- Strict mode enabled
+- Next.js plugin included
+
+### Tailwind Configuration
+
+```
+tailwind.config.ts          # Tailwind CSS v4 configuration
+postcss.config.js           # PostCSS configuration
+```
+
+Configured with:
+- shadcn/ui theme variables
+- Custom animations
+- Dark mode support
+
+### Package Configuration
+
+```
+package.json                # Dependencies and scripts
+```
+
+#### Key Dependencies
+
+- **next**: 16.1.1
+- **react**: 19.0.0
+- **next-auth**: 5.0.0-beta.25
+- **@prisma/client**: 6.1.0
+- **tailwindcss**: 4.0.0
+
+#### Available Scripts
+
+```json
+{
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "next lint",
+  "test": "vitest",
+  "test:run": "vitest run"
+}
+```
+
+### Environment Configuration
+
+```
+.env                        # Environment variables (gitignored)
+.env.example                # Example environment file
+```
+
+#### Required Environment Variables
+
+```bash
+DATABASE_URL="postgresql://..."
+AUTH_SECRET="..."
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+```
+
+<Warning>
+  Never commit `.env` to version control. Always use `.env.example` for documentation.
+</Warning>
+
+---
+
+## Testing Directory
+
+```
+__tests__/
+└── validation.test.ts      # Validation function tests
+```
+
+Tests use **Vitest** with jsdom environment.
+
+### Running Tests
+
+```bash
+# Watch mode
+npm test
+
+# Run once
+npm run test:run
+```
+
+---
+
+## Important Patterns
+
+### Server Components (Default)
+
+By default, all components in `app/` are React Server Components.
+
+```typescript
+// app/dashboard/page.tsx
+import { getCurrentUser } from "@/lib/auth";
+
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  // Fetch data directly in component
+  return <div>...</div>;
+}
+```
+
+### Client Components
+
+Use `'use client'` directive for interactive components.
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function UpdatePointsForm() {
+  const [balance, setBalance] = useState(0);
+  // Handle form submission, fetch calls
+}
+```
+
+### Dynamic Routes
+
+Dynamic route parameters are now async in Next.js 16.
+
+```typescript
+// app/api/requests/[id]/route.ts
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params; // Await params
+  // ...
+}
+```
+
+### Prisma Upsert Pattern
+
+Always use upsert for Points to handle first access.
+
+```typescript
+const points = await prisma.points.upsert({
+  where: { userId: user.id },
+  update: {},
+  create: { userId: user.id, balance: 0 },
+});
+```
+
+### Atomic Transactions
+
+Use transactions for operations modifying multiple records.
+
+```typescript
+await prisma.$transaction([
+  prisma.points.update({ /* ... */ }),
+  prisma.request.update({ /* ... */ }),
+  prisma.notification.create({ /* ... */ }),
+]);
+```
+
+---
+
+## Development Workflow
+
+### Adding a New Feature
+
+1. **Create API Route**: Add route in `app/api/`
+2. **Add Validation**: Update `lib/validation.ts` if needed
+3. **Update UI**: Create/modify components
+4. **Add Tests**: Write tests in `__tests__/`
+5. **Update Schema**: Modify `prisma/schema.prisma` if needed
+6. **Run Migrations**: `npx prisma migrate dev`
+7. **Generate Client**: `npx prisma generate`
+
+### Schema Changes
+
+```bash
+# 1. Edit prisma/schema.prisma
+# 2. Create and apply migration
+npx prisma migrate dev --name descriptive_name
+# 3. Generate updated Prisma Client
+npx prisma generate
+```
+
+### Adding a UI Component
+
+```bash
+# Install shadcn/ui component
+npx shadcn@latest add button
+```
+
+Components are added to `components/ui/`.
+
+---
+
+## File Naming Conventions
+
+- **Pages**: `page.tsx` (required for routes)
+- **Layouts**: `layout.tsx`
+- **API Routes**: `route.ts`
+- **Components**: PascalCase (e.g., `UpdatePointsForm.tsx`)
+- **Utilities**: camelCase (e.g., `auth.ts`, `validation.ts`)
+- **Tests**: `*.test.ts` or `*.test.tsx`
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/reference/database-schema">
+    Explore the complete database schema
+  </Card>
+  <Card title="API Routes" icon="code" href="/reference/api-routes">
+    Learn about all API endpoints
+  </Card>
+</CardGroup>

@@ -1,0 +1,189 @@
+---
+title: Welcome to SlugShare
+description: Share dining hall points with fellow UCSC students
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="SlugShare Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="SlugShare Hero Dark"
+/>
+
+## What is SlugShare?
+
+SlugShare is a community-driven platform that helps UCSC students share dining hall points with each other. Whether you have extra points at the end of the quarter or need help getting a meal, SlugShare connects students to support one another.
+
+<Note>
+  SlugShare is built by students, for students. All transactions happen peer-to-peer within the UCSC community.
+</Note>
+
+## How It Works
+
+SlugShare makes point sharing simple and transparent:
+
+1. **Create a Request** - Post a request for dining points at any UCSC dining location
+2. **Browse Requests** - See what your fellow Slugs need help with
+3. **Accept & Donate** - Help someone out by accepting their request
+4. **Track Your Balance** - Keep your points updated to stay in control
+
+All dining halls automatically calculate the correct meal swipe cost based on the current meal period (breakfast, lunch, dinner, or late night).
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card
+    title="Smart Dining Locations"
+    icon="utensils"
+    href="#supported-locations"
+  >
+    Support for all 5 UCSC dining halls, 2 markets, 3 Perks locations, and 7 cafes and restaurants across campus
+  </Card>
+  <Card
+    title="Real-Time Pricing"
+    icon="dollar-sign"
+    href="#dining-hall-pricing"
+  >
+    Dining hall requests automatically show the correct price based on meal period (breakfast: $12.60, lunch: $13.65, dinner: $14.70)
+  </Card>
+  <Card
+    title="Request Management"
+    icon="list-check"
+    href="/quickstart#create-your-first-request"
+  >
+    Create, view, and delete your requests. Track status updates when others accept or decline
+  </Card>
+  <Card
+    title="Advanced Filtering"
+    icon="filter"
+    href="/quickstart#accept-a-request"
+  >
+    Filter requests by location and maximum donation amount to find what works for you
+  </Card>
+  <Card
+    title="Secure Authentication"
+    icon="shield"
+    href="/quickstart#sign-up"
+  >
+    Sign up with Google OAuth or email/password. All accounts are protected with NextAuth.js
+  </Card>
+  <Card
+    title="Notification System"
+    icon="bell"
+    href="#notifications"
+  >
+    Get notified when someone accepts or declines your request through your inbox
+  </Card>
+</CardGroup>
+
+## Supported Locations
+
+SlugShare supports all major UCSC dining locations:
+
+### Dining Halls
+- Cowell/Stevenson (Open until 11 PM most days)
+- Crown/Merrill (Weekdays only)
+- Porter/Kresge (Weekdays until 7 PM)
+- Rachel Carson/Oakes (Open until 11 PM most days)
+- College 9/John R. Lewis (Open until 11 PM most days)
+
+### Markets
+- Merrill Market (Weekdays 9 AM - 8 PM)
+- Porter Market (Weekdays 7 AM - 8 PM)
+
+### Perks Coffee Bars
+- Baskin Engineering
+- Earth and Marine
+- Physical Sciences
+
+### Cafes & Restaurants
+- Banana Joe's Late Night (8 PM - 11 PM)
+- Global Village Cafe
+- Oakes Cafe
+- Stevenson Coffee House
+- University Center Cafe
+- Owl's Nest
+- University Center Bistro
+
+<Warning>
+  Location hours are dynamically shown in the app. Only open locations can be selected when creating requests.
+</Warning>
+
+## Dining Hall Pricing
+
+For dining halls with standard pricing, SlugShare automatically calculates the cost based on the current meal period:
+
+| Meal Period | Slug Points Cost |
+|-------------|------------------|
+| Breakfast | $12.60 |
+| Lunch | $13.65 |
+| Dinner | $14.70 |
+| Late Night | $13.65 |
+
+For markets, cafes, and other locations, you enter the custom point amount you need.
+
+## Notifications
+
+Stay updated on your requests through the inbox system:
+
+- Get notified when someone accepts your request
+- Get notified when someone declines your request
+- Mark notifications as read to keep your inbox organized
+- See unread notification counts at a glance
+
+## Community Resources
+
+SlugShare also helps connect students to additional food security resources:
+
+- **Swipes for Slugs** - Emergency meal swipe assistance program
+- **CalFresh (SNAP)** - Up to $291/month for groceries
+- **Campus Food Pantries** - Free groceries and essentials at multiple locations
+- **Cowell Coffee Shop** - Free meals and drinks for students
+- **Produce Pop-Up** - Affordable organic produce from the UCSC Farm
+
+<Card
+  title="Donation Calculator"
+  icon="calculator"
+  href="/features/donation-calculator"
+>
+  Use the donation calculator to plan how many points you can share before the end of the quarter
+</Card>
+
+## Get Started
+
+Ready to join the SlugShare community?
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart Guide"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get up and running in under 5 minutes
+  </Card>
+  <Card
+    title="Points Management"
+    icon="gauge"
+    href="/features/points-management"
+  >
+    Learn how to manage your points and requests
+  </Card>
+</CardGroup>
+
+## Built With Modern Tech
+
+SlugShare is built with:
+
+- **Next.js 16** - React framework with App Router
+- **NextAuth.js v5** - Secure authentication
+- **PostgreSQL + Prisma** - Reliable database
+- **shadcn/ui** - Beautiful UI components
+- **TypeScript** - Type-safe code
+
+<Note>
+  SlugShare is open source! Check out our [GitHub repository](https://github.com) to contribute or report issues.
+</Note>

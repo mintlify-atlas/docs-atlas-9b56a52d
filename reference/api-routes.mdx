@@ -1,0 +1,591 @@
+---
+title: API Routes
+description: All API endpoints with methods, parameters, and responses
+---
+
+SlugShare provides REST API endpoints for managing users, points, requests, and notifications. All endpoints require authentication via NextAuth.js session.
+
+## Authentication
+
+All API routes use `getCurrentUser()` to verify authentication. Requests without a valid session receive a 401 Unauthorized response.
+
+```typescript
+const user = await getCurrentUser();
+if (!user || !user.id) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+---
+
+## User Endpoints
+
+### GET /api/user
+
+Get the current authenticated user's information.
+
+#### Response
+
+<ResponseField name="id" type="string" required>
+  User's unique identifier
+</ResponseField>
+
+<ResponseField name="email" type="string" required>
+  User's email address
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  User's display name
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/user');
+const user = await response.json();
+// { id: "clx1...", email: "user@ucsc.edu", name: "John Doe" }
+```
+
+#### Error Responses
+
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error
+
+---
+
+### PATCH /api/user
+
+Update the current user's profile information.
+
+#### Request Body
+
+<ParamField path="phone" type="string" required>
+  User's phone number
+</ParamField>
+
+#### Response
+
+Returns the updated User object with all fields.
+
+#### Example
+
+```typescript
+const response = await fetch('/api/user', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phone: '831-555-1234' })
+});
+const updatedUser = await response.json();
+```
+
+#### Error Responses
+
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error
+
+---
+
+## Points Endpoints
+
+### GET /api/points
+
+Get the current user's points balance.
+
+#### Response
+
+<ResponseField name="balance" type="integer" required>
+  Current points balance
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/points');
+const data = await response.json();
+// { balance: 150 }
+```
+
+#### Behavior
+
+- If no Points record exists for the user, one is created with balance 0 (upsert pattern)
+- Verifies user exists in database before creating Points record
+
+#### Error Responses
+
+- **401 Unauthorized**: No valid session
+- **404 Not Found**: User not found in database
+- **500 Internal Server Error**: Database error
+
+---
+
+### POST /api/points
+
+Update the current user's points balance.
+
+#### Request Body
+
+<ParamField path="balance" type="integer" required>
+  New points balance (must be non-negative)
+</ParamField>
+
+#### Response
+
+<ResponseField name="balance" type="integer" required>
+  Updated points balance
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/points', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ balance: 200 })
+});
+const data = await response.json();
+// { balance: 200 }
+```
+
+#### Validation
+
+- Balance must be a number
+- Balance must be non-negative (>= 0)
+
+#### Error Responses
+
+- **400 Bad Request**: Invalid balance value
+- **401 Unauthorized**: No valid session
+- **404 Not Found**: User not found in database
+- **500 Internal Server Error**: Database error
+
+---
+
+## Request Endpoints
+
+### GET /api/requests
+
+Get all point-sharing requests, ordered by creation date (newest first).
+
+#### Response
+
+Returns an array of Request objects with related user information.
+
+<ResponseField name="id" type="string" required>
+  Request unique identifier
+</ResponseField>
+
+<ResponseField name="requesterId" type="string" required>
+  ID of user requesting points
+</ResponseField>
+
+<ResponseField name="donorId" type="string">
+  ID of user who accepted/declined (null if pending)
+</ResponseField>
+
+<ResponseField name="location" type="string" required>
+  UCSC dining hall location
+</ResponseField>
+
+<ResponseField name="pointsRequested" type="integer" required>
+  Number of points requested
+</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  Request status: `pending`, `accepted`, or `declined`
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Optional message from requester
+</ResponseField>
+
+<ResponseField name="requester" type="object" required>
+  Requester user information
+  <Expandable title="properties">
+    - **id** (string): User ID
+    - **name** (string): User's name
+    - **email** (string): User's email
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="donor" type="object">
+  Donor user information (null if pending)
+  <Expandable title="properties">
+    - **id** (string): User ID
+    - **name** (string): User's name
+    - **email** (string): User's email
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  ISO timestamp of request creation
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string" required>
+  ISO timestamp of last update
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/requests');
+const requests = await response.json();
+// [
+//   {
+//     id: "clx1...",
+//     requesterId: "clx2...",
+//     donorId: null,
+//     location: "Cowell/Stevenson",
+//     pointsRequested: 50,
+//     status: "pending",
+//     message: "Need lunch!",
+//     requester: {
+//       id: "clx2...",
+//       name: "Jane Smith",
+//       email: "jsmith@ucsc.edu"
+//     },
+//     donor: null,
+//     createdAt: "2024-01-15T12:00:00Z",
+//     updatedAt: "2024-01-15T12:00:00Z"
+//   }
+// ]
+```
+
+#### Error Responses
+
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error
+
+---
+
+### POST /api/requests
+
+Create a new point-sharing request.
+
+#### Request Body
+
+<ParamField path="location" type="string" required>
+  UCSC dining hall location (must be from predefined list)
+</ParamField>
+
+<ParamField path="pointsRequested" type="integer | string" required>
+  Number of points requested (accepts number or numeric string)
+</ParamField>
+
+<ParamField path="message" type="string">
+  Optional message to donors
+</ParamField>
+
+#### Response
+
+Returns the created Request object with requester information (status 201).
+
+#### Example
+
+```typescript
+const response = await fetch('/api/requests', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    location: 'Cowell/Stevenson',
+    pointsRequested: 50,
+    message: 'Need lunch today!'
+  })
+});
+const newRequest = await response.json();
+```
+
+#### Validation
+
+Uses `validateCreateRequest()` from `lib/validation.ts`:
+- Location must be non-empty
+- Points must be a positive number
+- Points must be ≤ 1000
+
+#### Error Responses
+
+- **400 Bad Request**: Validation error (invalid location or points)
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error
+
+---
+
+### DELETE /api/requests/[id]
+
+Delete a request. Only the requester can delete their own pending requests.
+
+#### URL Parameters
+
+<ParamField path="id" type="string" required>
+  Request ID to delete
+</ParamField>
+
+#### Response
+
+<ResponseField name="success" type="boolean" required>
+  True if deletion succeeded
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/requests/clx123', {
+  method: 'DELETE'
+});
+const result = await response.json();
+// { success: true }
+```
+
+#### Validation
+
+Uses `validateDeleteRequest()` from `lib/validation.ts`:
+- Request must exist
+- User must be the requester
+- Request must be pending (cannot delete accepted/declined requests)
+
+#### Error Responses
+
+- **400 Bad Request**: Cannot delete non-pending request
+- **401 Unauthorized**: No valid session
+- **403 Forbidden**: User is not the requester
+- **404 Not Found**: Request not found
+- **500 Internal Server Error**: Database error
+
+---
+
+### POST /api/requests/[id]/accept
+
+Accept a request and transfer points atomically.
+
+#### URL Parameters
+
+<ParamField path="id" type="string" required>
+  Request ID to accept
+</ParamField>
+
+#### Response
+
+<ResponseField name="success" type="boolean" required>
+  True if acceptance succeeded
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/requests/clx123/accept', {
+  method: 'POST'
+});
+const result = await response.json();
+// { success: true }
+```
+
+#### Atomic Transaction
+
+Executes the following operations in a single transaction:
+1. Decrement donor's points balance
+2. Increment requester's points balance
+3. Update request status to "accepted" and set donorId
+4. Create notification for requester
+5. Create confirmation notification for donor
+
+#### Validation
+
+Uses `validateAcceptRequest()` from `lib/validation.ts`:
+- Request must exist
+- User cannot accept their own request
+- Request must be pending
+- Donor must have sufficient points balance
+
+#### Error Responses
+
+- **400 Bad Request**: Cannot accept own request, insufficient balance, or not pending
+- **401 Unauthorized**: No valid session
+- **404 Not Found**: Request not found
+- **500 Internal Server Error**: Database error
+
+<Warning>
+  Point transfers use Prisma transactions (`prisma.$transaction`) to ensure atomicity. If any operation fails, all changes are rolled back.
+</Warning>
+
+---
+
+### POST /api/requests/[id]/decline
+
+Decline a request without transferring points.
+
+#### URL Parameters
+
+<ParamField path="id" type="string" required>
+  Request ID to decline
+</ParamField>
+
+#### Response
+
+<ResponseField name="success" type="boolean" required>
+  True if decline succeeded
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/requests/clx123/decline', {
+  method: 'POST'
+});
+const result = await response.json();
+// { success: true }
+```
+
+#### Atomic Transaction
+
+Executes the following operations in a single transaction:
+1. Update request status to "declined" and set donorId
+2. Create notification for requester
+
+#### Validation
+
+- Request must exist
+- User cannot decline their own request
+- Request must be pending
+
+#### Error Responses
+
+- **400 Bad Request**: Cannot decline own request or not pending
+- **401 Unauthorized**: No valid session
+- **404 Not Found**: Request not found
+- **500 Internal Server Error**: Database error
+
+---
+
+## Notification Endpoints
+
+### GET /api/notifications
+
+Get all notifications for the current user, ordered by newest first.
+
+#### Response
+
+Returns an array of Notification objects.
+
+<ResponseField name="id" type="string" required>
+  Notification unique identifier
+</ResponseField>
+
+<ResponseField name="userId" type="string" required>
+  User ID
+</ResponseField>
+
+<ResponseField name="type" type="string" required>
+  Notification type (e.g., `request_accepted`, `request_declined`)
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Human-readable notification message
+</ResponseField>
+
+<ResponseField name="read" type="boolean" required>
+  Whether notification has been read
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  ISO timestamp of notification creation
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string" required>
+  ISO timestamp of last update
+</ResponseField>
+
+#### Example
+
+```typescript
+const response = await fetch('/api/notifications');
+const notifications = await response.json();
+// [
+//   {
+//     id: "clx1...",
+//     userId: "clx2...",
+//     type: "request_accepted",
+//     message: "John Doe accepted your request for 50 points at Cowell/Stevenson",
+//     read: false,
+//     createdAt: "2024-01-15T12:00:00Z",
+//     updatedAt: "2024-01-15T12:00:00Z"
+//   }
+// ]
+```
+
+#### Error Responses
+
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error
+
+---
+
+### PATCH /api/notifications
+
+Update a notification's read status.
+
+#### Request Body
+
+<ParamField path="notificationId" type="string" required>
+  Notification ID to update
+</ParamField>
+
+<ParamField path="read" type="boolean" required>
+  New read status
+</ParamField>
+
+#### Response
+
+Returns the updated Notification object.
+
+#### Example
+
+```typescript
+const response = await fetch('/api/notifications', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    notificationId: 'clx123',
+    read: true
+  })
+});
+const notification = await response.json();
+```
+
+#### Security
+
+- Users can only update their own notifications (enforced by `userId` in query)
+
+#### Error Responses
+
+- **400 Bad Request**: Missing notification ID
+- **401 Unauthorized**: No valid session
+- **500 Internal Server Error**: Database error or notification not found
+
+---
+
+## Error Response Format
+
+All error responses follow this format:
+
+```json
+{
+  "error": "Error message describing what went wrong"
+}
+```
+
+### Common HTTP Status Codes
+
+- **200 OK**: Request succeeded
+- **201 Created**: Resource created successfully
+- **400 Bad Request**: Invalid request data or validation error
+- **401 Unauthorized**: Authentication required or invalid session
+- **403 Forbidden**: User lacks permission for this action
+- **404 Not Found**: Resource not found
+- **500 Internal Server Error**: Database or server error
+
+---
+
+## Rate Limiting
+
+<Note>
+  Currently, SlugShare does not implement rate limiting. This should be added before production deployment.
+</Note>

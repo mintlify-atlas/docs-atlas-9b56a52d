@@ -1,0 +1,231 @@
+---
+title: Environment Variables
+description: Configure environment variables for database, authentication, and OAuth
+---
+
+## Overview
+
+SlugShare requires several environment variables to connect to the database, secure authentication, and enable Google OAuth sign-in.
+
+<Warning>
+Never commit your `.env` file to version control. The `.env` file contains sensitive credentials and should remain private.
+</Warning>
+
+## Creating the .env File
+
+Create a `.env` file in the `webserver` directory (the root of your Next.js application):
+
+```bash
+touch .env
+```
+
+Then add the required environment variables below.
+
+## Required Environment Variables
+
+<Steps>
+  <Step title="Database URL">
+    Add your PostgreSQL connection string:
+    
+    ```env
+    DATABASE_URL="postgresql://user:password@localhost:5432/database_name?sslmode=require"
+    ```
+    
+    **Format breakdown:**
+    - `user` - Your PostgreSQL username
+    - `password` - Your PostgreSQL password
+    - `localhost:5432` - Database host and port
+    - `database_name` - Your database name
+    - `sslmode=require` - Enable SSL connection (recommended for production)
+    
+    <Note>
+    For local development without SSL, you can use `?sslmode=disable` instead.
+    </Note>
+    
+    **Example connection strings:**
+    
+    <CodeGroup>
+    ```env Local PostgreSQL
+    DATABASE_URL="postgresql://postgres:password@localhost:5432/slugshare?sslmode=disable"
+    ```
+    
+    ```env Supabase
+    DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require"
+    ```
+    
+    ```env Neon
+    DATABASE_URL="postgresql://[USER]:[PASSWORD]@[HOST]/[DATABASE]?sslmode=require"
+    ```
+    
+    ```env Railway
+    DATABASE_URL="postgresql://postgres:[PASSWORD]@[HOST]:[PORT]/railway?sslmode=require"
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="NextAuth Secret">
+    Generate and add an authentication secret:
+    
+    ```bash
+    openssl rand -base64 32
+    ```
+    
+    Copy the output and add it to your `.env`:
+    
+    ```env
+    AUTH_SECRET="your-generated-secret-here"
+    ```
+    
+    <Warning>
+    The `AUTH_SECRET` must be at least 32 characters long and should be a cryptographically secure random string. Never use a simple password or predictable string.
+    </Warning>
+    
+    <Note>
+    NextAuth.js v5 uses `AUTH_SECRET` (not `NEXTAUTH_SECRET` from v4).
+    </Note>
+  </Step>
+
+  <Step title="Google OAuth Credentials">
+    Add your Google OAuth credentials for sign-in functionality:
+    
+    ```env
+    GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET="your-google-client-secret"
+    ```
+    
+    See the [Google OAuth Setup](#google-oauth-setup) section below for instructions on obtaining these credentials.
+  </Step>
+</Steps>
+
+## Complete .env Template
+
+Your final `.env` file should look like this:
+
+```env
+# Database Connection
+DATABASE_URL="postgresql://user:password@localhost:5432/database_name?sslmode=require"
+
+# NextAuth.js Secret (generate with: openssl rand -base64 32)
+AUTH_SECRET="your-secret-key-here"
+
+# Google OAuth (for Google sign-in)
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+```
+
+## Optional Environment Variables
+
+### Prisma Accelerate
+
+If you're using Prisma Accelerate for connection pooling and caching:
+
+```env
+PRISMA_DATABASE_URL="prisma+postgres://accelerate.prisma-data.net/?api_key=your_api_key"
+```
+
+### Alternative PostgreSQL URL
+
+Some hosting providers use `POSTGRES_URL` instead of `DATABASE_URL`:
+
+```env
+POSTGRES_URL="postgresql://user:password@localhost:5432/database_name?sslmode=require"
+```
+
+## Google OAuth Setup
+
+To enable Google sign-in, you need to create OAuth credentials in Google Cloud Console:
+
+<Steps>
+  <Step title="Access Google Cloud Console">
+    Navigate to [Google Cloud Console](https://console.cloud.google.com/)
+  </Step>
+
+  <Step title="Create or select a project">
+    - Click the project dropdown in the top navigation
+    - Select an existing project or click **New Project**
+    - Give your project a name (e.g., "SlugShare")
+  </Step>
+
+  <Step title="Enable Google+ API">
+    - Go to **APIs & Services > Library**
+    - Search for "Google+ API"
+    - Click **Enable**
+  </Step>
+
+  <Step title="Create OAuth credentials">
+    - Go to **APIs & Services > Credentials**
+    - Click **Create Credentials > OAuth client ID**
+    - Select **Application type: Web application**
+    - Give it a name (e.g., "SlugShare Web Client")
+    
+    **Add authorized redirect URIs:**
+    
+    <CodeGroup>
+    ```text Development
+    http://localhost:3000/api/auth/callback/google
+    ```
+    
+    ```text Production
+    https://yourdomain.com/api/auth/callback/google
+    ```
+    </CodeGroup>
+    
+    <Warning>
+    The redirect URI must exactly match your application URL. For local development, use `http://localhost:3000`. For production, use your actual domain with `https://`.
+    </Warning>
+  </Step>
+
+  <Step title="Copy credentials">
+    - Click **Create**
+    - Copy the **Client ID** to `GOOGLE_CLIENT_ID` in your `.env`
+    - Copy the **Client Secret** to `GOOGLE_CLIENT_SECRET` in your `.env`
+  </Step>
+</Steps>
+
+## Verifying Environment Variables
+
+After setting up your `.env` file, verify it's being loaded correctly:
+
+```bash
+node -e "require('dotenv').config(); console.log(process.env.DATABASE_URL ? 'DATABASE_URL is set' : 'DATABASE_URL is missing')"
+```
+
+<Note>
+Next.js automatically loads environment variables from `.env` files. You don't need to install `dotenv` separately.
+</Note>
+
+## Security Best Practices
+
+1. **Never commit `.env` to git** - It's already in `.gitignore`
+2. **Use different secrets for development and production**
+3. **Rotate secrets regularly** - Especially after team member changes
+4. **Use SSL for database connections** - Add `sslmode=require` to production URLs
+5. **Restrict OAuth redirect URIs** - Only add URLs you actually use
+
+## Troubleshooting
+
+### "Cannot connect to database"
+
+Check that:
+- Your PostgreSQL server is running
+- The `DATABASE_URL` format is correct
+- Username and password are correct
+- The database exists (you may need to create it first)
+
+### "Invalid AUTH_SECRET"
+
+Ensure:
+- The secret is at least 32 characters
+- There are no extra spaces or quotes
+- You've restarted the dev server after adding it
+
+### "Google OAuth not working"
+
+Verify:
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct
+- The redirect URI in Google Cloud Console matches your app URL exactly
+- Google+ API is enabled in your Google Cloud project
+
+## Next Steps
+
+Now that your environment variables are configured, proceed to **Database Setup** to initialize your PostgreSQL database with Prisma.

@@ -1,0 +1,363 @@
+---
+title: Request Management
+description: Create, view, accept, decline, and delete dining hall points requests
+---
+
+SlugShare's core feature is the request system, where students can create requests for dining hall points at specific UCSC locations, and other students can accept or decline those requests.
+
+## Request Model
+
+Requests are stored in the database with the following schema:
+
+```prisma prisma/schema.prisma
+model Request {
+  id              String   @id @default(cuid())
+  requesterId     String
+  donorId         String?
+  location        String
+  pointsRequested Int
+  status          String   @default("pending") // pending, accepted, declined
+  message         String?
+  requester       User     @relation("Requester", fields: [requesterId], references: [id])
+  donor           User?    @relation("Donor", fields: [donorId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+```
+
+**Request Status Values:**
+- `pending` - Request is open and awaiting a donor
+- `accepted` - Request has been fulfilled by a donor
+- `declined` - Request was declined by a potential donor
+
+## Creating a Request
+
+<Steps>
+  <Step title="Navigate to create request form">
+    Users can create a request from the dashboard by clicking "Create Request" or navigating to `/requests/create`.
+  </Step>
+
+  <Step title="Fill out request details">
+    Users must provide:
+    - **Location** - Select from UCSC dining locations (dropdown)
+    - **Points Requested** - Number of points needed (must be positive)
+    - **Message** (optional) - Additional context or explanation
+  </Step>
+
+  <Step title="Submit request">
+    The form sends a POST request to `/api/requests`:
+
+    ```typescript
+    const response = await fetch("/api/requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "Cowell/Stevenson",
+        pointsRequested: 15,
+        message: "Need lunch today!"
+      }),
+    });
+    ```
+  </Step>
+
+  <Step title="Validation">
+    The API validates the request data using centralized validation:
+
+    ```typescript lib/validation.ts
+    export function validateCreateRequest(body: {
+      location?: unknown;
+      pointsRequested?: unknown;
+    }): ValidationResult {
+      if (!location || typeof location !== "string" || location.trim().length === 0) {
+        return { valid: false, error: "Location is required", status: 400 };
+      }
+
+      if (typeof pointsRequested !== "number" || pointsRequested <= 0) {
+        return {
+          valid: false,
+          error: "Points requested must be a positive number",
+          status: 400,
+        };
+      }
+
+      return { valid: true };
+    }
+    ```
+  </Step>
+
+  <Step title="Create database record">
+    After validation, the request is saved to the database:
+
+    ```typescript app/api/requests/route.ts
+    const newRequest = await prisma.request.create({
+      data: {
+        requesterId: user.id,
+        location: location.trim(),
+        pointsRequested: pointsRequested,
+        message: message?.trim() || null,
+        status: "pending",
+      },
+    });
+    ```
+  </Step>
+
+  <Step title="Redirect to requests page">
+    After successful creation, the user is redirected to `/requests` where they can see their new request listed under "My Requests".
+  </Step>
+</Steps>
+
+## Viewing Requests
+
+The `/requests` page displays all requests in two sections:
+
+### My Requests
+
+Requests created by the current user:
+
+```typescript app/requests/page.tsx
+const myRequests = currentUserId
+  ? requests.filter((req) => req.requesterId === currentUserId)
+  : [];
+```
+
+**Display Information:**
+- Location and points requested
+- Status (pending, accepted, or declined)
+- Optional message
+- Donor name (if accepted or declined)
+- Created timestamp
+- Delete button (only for pending requests)
+
+### Other Requests
+
+Requests from other users that the current user can accept or decline:
+
+```typescript app/requests/page.tsx
+const otherRequests = currentUserId
+  ? requests.filter((req) => req.requesterId !== currentUserId)
+  : requests;
+```
+
+**Display Information:**
+- Requester name/email
+- Location and points requested
+- Status
+- Optional message
+- Accept/Decline buttons (only for pending requests)
+
+### Filtering Requests
+
+Users can filter requests by location and maximum donation amount:
+
+```typescript app/requests/page.tsx
+// Filter by selected locations
+const locationFilter = (req: Request) =>
+  selectedLocations.size === 0 || selectedLocations.has(req.location);
+
+// Filter by max donation amount
+const filteredOtherRequests = otherRequests.filter((req) => {
+  if (!locationFilter(req)) return false;
+  if (maxDonationValid && req.pointsRequested > maxDonationNum) return false;
+  return true;
+});
+```
+
+## Accepting a Request
+
+When a user accepts another user's request:
+
+<Steps>
+  <Step title="Click Accept button">
+    On a pending request in the "Other Requests" section, click the "Accept" button.
+  </Step>
+
+  <Step title="Send accept request">
+    ```typescript
+    const response = await fetch(`/api/requests/${requestId}/accept`, {
+      method: "POST",
+    });
+    ```
+  </Step>
+
+  <Step title="Validation checks">
+    The API performs multiple validations:
+
+    ```typescript lib/validation.ts
+    export function validateAcceptRequest(
+      request: { requesterId: string; status: string; pointsRequested: number },
+      userId: string,
+      donorBalance: number
+    ): ValidationResult {
+      // Cannot accept your own request
+      if (request.requesterId === userId) {
+        return { valid: false, error: "You cannot accept your own request", status: 400 };
+      }
+
+      // Request must be pending
+      if (request.status !== "pending") {
+        return { valid: false, error: "Request is no longer pending", status: 400 };
+      }
+
+      // Must have sufficient balance
+      if (donorBalance < request.pointsRequested) {
+        return { valid: false, error: "Insufficient points balance", status: 400 };
+      }
+
+      return { valid: true };
+    }
+    ```
+  </Step>
+
+  <Step title="Execute transaction">
+    Points are transferred atomically using a Prisma transaction:
+
+    ```typescript app/api/requests/[id]/accept/route.ts
+    await prisma.$transaction([
+      // Decrease donor's balance
+      prisma.points.update({
+        where: { userId: user.id },
+        data: { balance: { decrement: request.pointsRequested } },
+      }),
+      // Increase requester's balance
+      prisma.points.update({
+        where: { userId: request.requesterId },
+        data: { balance: { increment: request.pointsRequested } },
+      }),
+      // Update request status and set donor
+      prisma.request.update({
+        where: { id: requestId },
+        data: { status: "accepted", donorId: user.id },
+      }),
+      // Create notifications
+      prisma.notification.create({
+        data: {
+          userId: request.requesterId,
+          type: "request_accepted",
+          message: `${user.name} accepted your request for ${request.pointsRequested} points`,
+        },
+      }),
+    ]);
+    ```
+  </Step>
+
+  <Step title="Refresh requests list">
+    After successful acceptance, the requests list refreshes to show updated statuses.
+  </Step>
+</Steps>
+
+<Warning>
+  If you don't have enough points to fulfill a request, the accept action will fail with an "Insufficient points balance" error.
+</Warning>
+
+## Declining a Request
+
+Users can decline requests they don't want to fulfill:
+
+<Steps>
+  <Step title="Click Decline button">
+    On a pending request, click the "Decline" button.
+  </Step>
+
+  <Step title="Send decline request">
+    ```typescript
+    const response = await fetch(`/api/requests/${requestId}/decline`, {
+      method: "POST",
+    });
+    ```
+  </Step>
+
+  <Step title="Update request status">
+    The API updates the request status to "declined" and sets the donor ID:
+
+    ```typescript
+    await prisma.request.update({
+      where: { id: requestId },
+      data: {
+        status: "declined",
+        donorId: user.id,
+      },
+    });
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Declining a request does NOT transfer points. It simply marks the request as declined so the requester knows it was seen but not fulfilled.
+</Note>
+
+## Deleting a Request
+
+Users can delete their own pending requests:
+
+<Steps>
+  <Step title="Click Delete button">
+    Only available on your own pending requests in the "My Requests" section.
+  </Step>
+
+  <Step title="Confirm deletion">
+    A confirmation dialog appears:
+    ```typescript
+    if (!confirm("Are you sure you want to delete this request?")) {
+      return;
+    }
+    ```
+  </Step>
+
+  <Step title="Send delete request">
+    ```typescript
+    const response = await fetch(`/api/requests/${requestId}`, {
+      method: "DELETE",
+    });
+    ```
+  </Step>
+
+  <Step title="Validate deletion">
+    The API validates the user can delete the request:
+
+    ```typescript lib/validation.ts
+    export function validateDeleteRequest(
+      request: { requesterId: string; status: string } | null,
+      userId: string
+    ): ValidationResult {
+      if (request.requesterId !== userId) {
+        return { valid: false, error: "You can only delete your own requests", status: 403 };
+      }
+
+      if (request.status !== "pending") {
+        return { valid: false, error: "You can only delete pending requests", status: 400 };
+      }
+
+      return { valid: true };
+    }
+    ```
+  </Step>
+
+  <Step title="Delete from database">
+    ```typescript
+    await prisma.request.delete({
+      where: { id: requestId },
+    });
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  You can only delete your own requests, and only while they are still pending. Accepted or declined requests cannot be deleted.
+</Warning>
+
+## UCSC Locations
+
+Requests must specify a valid UCSC dining location. The available locations are defined in:
+
+```typescript lib/locations.ts
+export const UCSC_LOCATIONS_DATA = [
+  { name: "Cowell/Stevenson", category: "Dining Halls" },
+  { name: "Crown/Merrill", category: "Dining Halls" },
+  { name: "Porter/Kresge", category: "Dining Halls" },
+  { name: "Rachel Carson/Oakes", category: "Dining Halls" },
+  { name: "College 9/John R. Lewis Dining Hall", category: "Dining Halls" },
+  // Markets, cafes, and other locations...
+];
+```
+
+This constant is used in both the create request form (dropdown) and the filter UI to ensure consistency.

@@ -1,80 +1,389 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with SlugShare in 5 minutes
 ---
 
-## Get started in three steps
+## Welcome to SlugShare!
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through everything you need to start sharing dining points with fellow UCSC students.
 
-### Step 1: Set up your local environment
+<Note>
+  You'll need a valid email address and access to the UCSC campus dining system to use SlugShare.
+</Note>
+
+## Sign Up
+
+<Steps>
+  <Step title="Navigate to SlugShare">
+    Visit the SlugShare application. You'll be automatically redirected to the login page if you're not signed in.
+  </Step>
+  
+  <Step title="Choose Your Sign-Up Method">
+    You have two options to create your account:
+    
+    **Option 1: Sign up with Google (Recommended)**
+    
+    Click the "Google" button to sign up with your UCSC Google account. This is the fastest way to get started.
+    
+    **Option 2: Sign up with Email/Password**
+    
+    Fill out the sign-up form:
+    - **Name**: Your display name (optional but recommended)
+    - **Email**: Your email address
+    - **Password**: At least 6 characters
+    
+    Click "Create account" to continue.
+    
+    <Warning>
+      If you see "An account already exists with that email address", use the sign-in page instead.
+    </Warning>
+  </Step>
+  
+  <Step title="Access Your Dashboard">
+    After signing up, you'll be automatically logged in and redirected to your dashboard.
+    
+    Your dashboard shows:
+    - Your current points balance (starts at 0)
+    - Quick action buttons to create and view requests
+    - Access to the donation calculator and additional resources
+  </Step>
+</Steps>
+
+## Set Up Your Points Balance
+
+Before you can accept requests from others, you need to tell SlugShare how many dining points you have.
+
+<Steps>
+  <Step title="Find Your Current Points">
+    Check your dining points balance:
+    1. Log in to the [UCSC Dining Portal](https://nutrition.sa.ucsc.edu/)
+    2. View your current Slug Points balance
+    3. Note the exact amount
+  </Step>
+  
+  <Step title="Update Your Balance">
+    On your SlugShare dashboard:
+    1. Look for the "Your Points Balance" card
+    2. Enter your current points in the "Update Balance" field
+    3. Click "Update"
+    
+    ```typescript
+    // The app stores your balance like this:
+    interface Points {
+      userId: string;
+      balance: number;  // Your current dining points
+    }
+    ```
+    
+    <Note>
+      Keep your balance updated! SlugShare uses this to ensure you have enough points before accepting requests.
+    </Note>
+  </Step>
+</Steps>
+
+## Create Your First Request
+
+Now you're ready to request points from the community.
+
+<Steps>
+  <Step title="Navigate to Create Request">
+    From your dashboard, click the blue "Create Request" button.
+  </Step>
+  
+  <Step title="Select a Location">
+    Choose where you need dining points:
+    
+    1. Browse the accordion menu with four categories:
+       - **Dining Halls** (automatic pricing based on meal time)
+       - **Markets** (custom amount)
+       - **Perks Coffee Bar** (custom amount)
+       - **Cafes and Restaurants** (custom amount)
+    
+    2. Only **currently open** locations are selectable
+    
+    3. Each location shows:
+       - Current open/closed status
+       - Closing time if open
+       - Meal period and cost for dining halls
+    
+    <Note>
+      Dining halls automatically calculate the cost. For example, if it's lunch time (11:30 AM - 2:00 PM), the cost will be $13.65.
+    </Note>
+    
+    Example of what you'll see:
+    ```tsx
+    // Cowell/Stevenson (Open)
+    // Open until 23:00
+    // LUNCH: $13.65
+    ```
+  </Step>
+  
+  <Step title="Enter Points Amount (Non-Dining Halls Only)">
+    If you selected a market, cafe, or Perks location:
+    1. Enter the exact number of points you need
+    2. This should match the cost of what you plan to purchase
+    
+    For dining halls, this field is hidden and automatically set based on the meal period.
+  </Step>
+  
+  <Step title="Add an Optional Message">
+    You can include a message with your request:
+    - Explain your situation
+    - Specify timing ("Need by 7 PM tonight")
+    - Add any helpful context
+    
+    This helps donors understand your needs better.
+  </Step>
+  
+  <Step title="Submit Your Request">
+    Click "Create Request" to post your request to the community.
+    
+    You'll be redirected to the requests page where you can see:
+    - Your newly created request in the "My Requests" section
+    - Its status (will be "pending" initially)
+    - When it was created
+    
+    ```typescript
+    // Your request looks like this in the system:
+    interface Request {
+      id: string;
+      location: "Cowell/Stevenson";
+      pointsRequested: 13.65;  // Auto-calculated for dining halls
+      status: "pending";  // Can be: pending, accepted, declined
+      message: "Need lunch today, low on points";
+      createdAt: Date;
+    }
+    ```
+  </Step>
+</Steps>
+
+## Accept a Request
+
+Help out a fellow Slug by accepting their request.
+
+<Steps>
+  <Step title="Browse Available Requests">
+    1. From your dashboard, click "View All Requests"
+    2. You'll see two sections:
+       - **My Requests** - Requests you've created
+       - **Other Requests** - Requests from other students you can help with
+    
+    <Note>
+      You can only accept requests from other students. Your own requests appear in a separate section.
+    </Note>
+  </Step>
+  
+  <Step title="Use Filters (Optional)">
+    Use the "Filters" dropdown to narrow down requests:
+    
+    **Filter by Location:**
+    - Check boxes next to specific dining locations
+    - Only requests for those locations will show
+    - Leave all unchecked to see requests for all locations
+    
+    **Filter by Max Donation:**
+    - Enter the maximum points you're willing to donate
+    - Requests above this amount will be hidden
+    - Leave blank for no limit
+    
+    ```typescript
+    // Filter example: Only show requests for Cowell/Stevenson
+    // that need 15 points or less
+    selectedLocations: Set(['Cowell/Stevenson'])
+    maxDonation: 15
+    ```
+    
+    Click "Clear filters" at any time to reset.
+  </Step>
+  
+  <Step title="Review Request Details">
+    Each request card shows:
+    - **Location** (e.g., "Cowell/Stevenson")
+    - **Requester** name or email
+    - **Points needed** (in large blue text)
+    - **Optional message** from the requester
+    - **Status** (pending, accepted, declined)
+    - **Creation timestamp**
+    
+    <Warning>
+      Make sure you have enough points in your balance before accepting!
+    </Warning>
+  </Step>
+  
+  <Step title="Accept or Decline">
+    For any pending request:
+    
+    **To Accept:**
+    1. Click the "Accept" button
+    2. The system will:
+       - Verify you have sufficient points
+       - Deduct points from your balance
+       - Add points to the requester's balance
+       - Update the request status to "accepted"
+       - Send a notification to the requester
+    
+    **To Decline:**
+    1. Click the "Decline" button
+    2. The request status updates to "declined"
+    3. The requester is notified
+    
+    Behind the scenes, this is what happens when you accept:
+    ```typescript
+    // Atomic transaction ensures data consistency
+    await prisma.$transaction([
+      // Deduct from your balance
+      prisma.points.update({
+        where: { userId: yourId },
+        data: { balance: { decrement: pointsRequested } }
+      }),
+      // Add to requester's balance
+      prisma.points.update({
+        where: { userId: requesterId },
+        data: { balance: { increment: pointsRequested } }
+      }),
+      // Update request status
+      prisma.request.update({
+        where: { id: requestId },
+        data: { 
+          status: "accepted",
+          donorId: yourId 
+        }
+      })
+    ]);
+    ```
+    
+    <Note>
+      If you don't have enough points, you'll see an error message and the transaction won't go through.
+    </Note>
+  </Step>
+  
+  <Step title="Coordinate the Transfer">
+    After accepting a request:
+    1. Both you and the requester can see each other's contact info
+    2. Coordinate timing and location through email or messaging
+    3. Complete the actual points transfer through the UCSC dining system
+    
+    <Warning>
+      SlugShare tracks the commitment, but you still need to complete the actual transfer through UCSC's system.
+    </Warning>
+  </Step>
+</Steps>
+
+## Manage Your Requests
+
+Keep track of your activity on the requests page.
+
+### View Your Requests
+
+Your requests appear in the "My Requests" section with:
+- **Pending** - Waiting for someone to accept (shown in yellow)
+- **Accepted** - Someone accepted your request (shown in green with donor name)
+- **Declined** - Someone declined your request (shown in red with donor name)
+
+### Delete a Request
+
+If you no longer need points:
+1. Find your pending request in the "My Requests" section
+2. Click the red "Delete" button
+3. Confirm the deletion
+
+<Note>
+  You can only delete requests with "pending" status. Once accepted or declined, requests cannot be deleted.
+</Note>
+
+### Refresh the List
+
+Click the "Refresh" button to see the latest updates to all requests in real-time.
+
+## Check Your Notifications
+
+Stay informed about your request activity through the inbox.
+
+<Steps>
+  <Step title="Access Your Inbox">
+    Click "Inbox" in the navigation menu to see all notifications.
+  </Step>
+  
+  <Step title="View Notifications">
+    Each notification shows:
+    - A message about what happened (e.g., "Your request for Cowell/Stevenson was accepted")
+    - Timestamp of when it occurred
+    - Read/unread status (unread notifications have a blue dot)
+  </Step>
+  
+  <Step title="Mark as Read">
+    Keep your inbox organized:
+    - Click "Mark as Read" on individual notifications
+    - Click "Mark All as Read" to clear all unread notifications
+    
+    Unread notifications are highlighted and show in bold.
+  </Step>
+</Steps>
+
+## Pro Tips
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+  <Accordion title="Keep your balance updated">
+    Update your points balance regularly, especially after:
+    - Using meal swipes
+    - Adding more points to your account
+    - Accepting requests from others
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+    This ensures the system can accurately validate your donations.
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+  
+  <Accordion title="Be specific in your messages">
+    When creating requests, include helpful details:
+    - Timing: "Need by 6 PM for dinner"
+    - Urgency: "Low on points until next week"
+    - Context: "Last meal of the day"
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+    This helps donors prioritize and connect with your request.
+  </Accordion>
+  
+  <Accordion title="Use the donation calculator">
+    Before the quarter ends, use the donation calculator to:
+    - See how many points you have remaining
+    - Calculate how many meals you can donate
+    - Plan your point usage efficiently
+    
+    Access it from the dashboard under "Donation Calculator".
+  </Accordion>
+  
+  <Accordion title="Check location hours">
+    Dining locations have different hours by day:
+    - Some dining halls are closed on weekends
+    - Markets close at 8 PM on weekdays
+    - Late-night options are limited
+    
+    The app shows real-time open/closed status when creating requests.
+  </Accordion>
+  
+  <Accordion title="Filter strategically">
+    Use filters to find requests you're most likely to help with:
+    - Filter by locations near your dorm or classes
+    - Set a max donation based on your available points
+    - Clear filters when you want to see all opportunities
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+## Need More Help?
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Points Management" icon="gauge" href="/features/points-management">
+    Learn all the features of your dashboard
+  </Card>
+  <Card title="Donation Calculator" icon="calculator" href="/features/donation-calculator">
+    Calculate how many points you can donate
+  </Card>
+  <Card title="Food Resources" icon="utensils" href="/features/locations">
+    Explore additional food security resources on campus
+  </Card>
+  <Card title="API Reference" icon="code" href="/reference/api-routes">
+    Technical documentation for developers
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Questions or feedback? Reach out to the SlugShare team through our GitHub repository or contact the developers directly.
 </Note>

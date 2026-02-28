@@ -1,0 +1,171 @@
+---
+title: Installation
+description: Install dependencies and get SlugShare running locally
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js** v20 or higher
+- **npm**, **yarn**, or **pnpm** package manager
+- **PostgreSQL** database (local or cloud-hosted)
+
+<Note>
+You can check your Node.js version by running `node --version` in your terminal.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the SlugShare repository to your local machine:
+    
+    ```bash
+    git clone <repository-url>
+    cd webserver
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required npm packages:
+    
+    <CodeGroup>
+    ```bash npm
+    npm install
+    ```
+    
+    ```bash yarn
+    yarn install
+    ```
+    
+    ```bash pnpm
+    pnpm install
+    ```
+    </CodeGroup>
+    
+    This will install all dependencies including:
+    - Next.js 16.1.1 with React 19
+    - NextAuth.js v5 (beta) for authentication
+    - Prisma ORM for database management
+    - Tailwind CSS v4 for styling
+    - shadcn/ui components
+    
+    <Note>
+    The `postinstall` script automatically runs `prisma generate` to generate the Prisma Client after installation.
+    </Note>
+  </Step>
+
+  <Step title="Verify installation">
+    Check that all dependencies installed correctly:
+    
+    ```bash
+    npm list --depth=0
+    ```
+    
+    You should see packages like `next`, `@prisma/client`, `next-auth`, and others listed without errors.
+  </Step>
+</Steps>
+
+## Key Dependencies
+
+### Core Framework
+- **Next.js 16.1.1** - React framework with App Router
+- **React 19.2.3** - UI library
+- **TypeScript 5** - Type-safe JavaScript
+
+### Authentication
+- **NextAuth.js 5.0.0-beta.30** - Authentication for Next.js
+- **@auth/prisma-adapter 2.11.1** - Prisma adapter for NextAuth
+
+### Database
+- **@prisma/client 6.19.2** - Prisma ORM client
+- **@prisma/extension-accelerate** - Optional Prisma Accelerate extension
+- **prisma 6.19.2** - Prisma CLI (dev dependency)
+
+### UI Components
+- **Tailwind CSS 4** - Utility-first CSS framework
+- **shadcn/ui** - Radix UI components (accordion, avatar, dropdown, label)
+- **lucide-react** - Icon library
+- **recharts** - Charting library
+
+### Testing
+- **Vitest 4.0.18** - Unit testing framework
+- **@testing-library/react** - React testing utilities
+
+## Available Scripts
+
+After installation, you can use these npm scripts:
+
+<CodeGroup>
+```bash Development
+npm run dev
+# Starts Next.js development server at http://localhost:3000
+```
+
+```bash Build
+npm run build
+# Creates optimized production build
+```
+
+```bash Production
+npm run start
+# Starts production server (run build first)
+```
+
+```bash Linting
+npm run lint
+# Runs ESLint to check code quality
+```
+
+```bash Testing
+npm test
+# Runs Vitest in watch mode
+
+npm run test:run
+# Runs Vitest once
+```
+</CodeGroup>
+
+<Warning>
+Do not run `npm run dev` yet! You need to set up environment variables and the database first. Continue to the next pages in the setup guide.
+</Warning>
+
+## Troubleshooting
+
+### Node.js Version Issues
+
+If you encounter errors during installation, verify your Node.js version:
+
+```bash
+node --version
+```
+
+SlugShare requires Node.js v20 or higher. If you have an older version, update Node.js before continuing.
+
+### Installation Errors
+
+If `npm install` fails:
+
+1. **Clear npm cache**: `npm cache clean --force`
+2. **Delete node_modules**: `rm -rf node_modules package-lock.json`
+3. **Reinstall**: `npm install`
+
+### Prisma Generation Fails
+
+If the `postinstall` script fails to generate Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+This manually generates the Prisma Client. You'll need a valid `DATABASE_URL` in your `.env` file for this to work (see the next page).
+
+## Next Steps
+
+Now that dependencies are installed, proceed to:
+
+1. **Environment Variables** - Configure required environment variables
+2. **Database Setup** - Set up PostgreSQL and run migrations
+
+After completing these steps, you'll be ready to start the development server.

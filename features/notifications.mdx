@@ -1,0 +1,270 @@
+---
+title: Notifications
+description: Real-time updates when requests are accepted or declined
+---
+
+SlugShare's notification system keeps users informed when their requests are accepted or declined, and when they accept requests from others.
+
+## Notification Model
+
+Notifications are stored in the database with the following schema:
+
+```prisma prisma/schema.prisma
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "request_accepted", "request_declined", etc.
+  message   String
+  read      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+**Notification Types:**
+- `request_accepted` - Your request was accepted by a donor
+- `request_declined` - Your request was declined by a potential donor
+- `request_accepted_by_you` - Confirmation that you accepted someone's request
+
+## Automatic Notification Creation
+
+Notifications are automatically created when requests are accepted or declined:
+
+### When a Request is Accepted
+
+Two notifications are created in the same database transaction as the points transfer:
+
+```typescript app/api/requests/[id]/accept/route.ts
+await prisma.$transaction([
+  // ... points transfer operations ...
+
+  // Notification for requester
+  prisma.notification.create({
+    data: {
+      userId: request.requesterId,
+      type: "request_accepted",
+      message: `${user.name || user.email} accepted your request for ${request.pointsRequested} points at ${request.location}`,
+      read: false,
+    },
+  }),
+
+  // Confirmation notification for donor
+  prisma.notification.create({
+    data: {
+      userId: user.id,
+      type: "request_accepted_by_you",
+      message: `You accepted ${request.requester.name || request.requester.email}'s request for ${request.pointsRequested} points at ${request.location}`,
+      read: false,
+    },
+  }),
+]);
+```
+
+<Note>
+  Creating notifications within the transaction ensures they are only created if the points transfer succeeds. If the transaction fails, no notifications are created.
+</Note>
+
+### When a Request is Declined
+
+A notification is sent to the requester:
+
+```typescript
+await prisma.notification.create({
+  data: {
+    userId: request.requesterId,
+    type: "request_declined",
+    message: `${user.name || user.email} declined your request for ${request.pointsRequested} points at ${request.location}`,
+    read: false,
+  },
+});
+```
+
+## Fetching Notifications
+
+Users can retrieve all their notifications via the API:
+
+<Steps>
+  <Step title="Send GET request">
+    ```typescript
+    const response = await fetch("/api/notifications");
+    const notifications = await response.json();
+    ```
+  </Step>
+
+  <Step title="API retrieves notifications">
+    The API fetches all notifications for the authenticated user, ordered by newest first:
+
+    ```typescript app/api/notifications/route.ts
+    export async function GET() {
+      const user = await getCurrentUser();
+
+      if (!user || !user.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const notifications = await prisma.notification.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return NextResponse.json(notifications);
+    }
+    ```
+  </Step>
+
+  <Step title="Display notifications">
+    Notifications can be displayed in a list showing:
+    - Notification message
+    - Read/unread status
+    - Timestamp
+    - Notification type
+  </Step>
+</Steps>
+
+## Marking Notifications as Read
+
+Users can mark notifications as read to track which updates they've seen:
+
+<Steps>
+  <Step title="Send PATCH request">
+    ```typescript
+    const response = await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notificationId: "clx123abc",
+        read: true,
+      }),
+    });
+    ```
+  </Step>
+
+  <Step title="Validate notification ownership">
+    The API ensures users can only update their own notifications:
+
+    ```typescript app/api/notifications/route.ts
+    export async function PATCH(request: NextRequest) {
+      const user = await getCurrentUser();
+      if (!user || !user.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const { notificationId, read } = await request.json();
+
+      if (typeof notificationId !== "string") {
+        return NextResponse.json(
+          { error: "Notification ID is required" },
+          { status: 400 }
+        );
+      }
+
+      const notification = await prisma.notification.update({
+        where: {
+          id: notificationId,
+          userId: user.id, // Ensure user can only update their own notifications
+        },
+        data: {
+          read: read === true,
+        },
+      });
+
+      return NextResponse.json(notification);
+    }
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Users can only mark their own notifications as read. Attempting to update another user's notification will fail.
+</Warning>
+
+## Notification Message Format
+
+Notification messages are dynamically generated with relevant details:
+
+### Request Accepted
+
+```typescript
+`${donorName} accepted your request for ${pointsAmount} points at ${location}`
+```
+
+**Example:** "John Smith accepted your request for 15 points at Cowell/Stevenson"
+
+### Request Declined
+
+```typescript
+`${donorName} declined your request for ${pointsAmount} points at ${location}`
+```
+
+**Example:** "Jane Doe declined your request for 20 points at Crown/Merrill"
+
+### You Accepted a Request
+
+```typescript
+`You accepted ${requesterName}'s request for ${pointsAmount} points at ${location}`
+```
+
+**Example:** "You accepted Alice Johnson's request for 10 points at Porter/Kresge"
+
+## Notification Badge Count
+
+To display an unread notification count badge:
+
+```typescript
+const unreadCount = notifications.filter((n) => !n.read).length;
+```
+
+This can be shown in the navigation bar or notification icon to alert users to new notifications.
+
+## Best Practices
+
+<Steps>
+  <Step title="Poll for notifications periodically">
+    Since SlugShare doesn't use WebSockets, implement polling to check for new notifications:
+
+    ```typescript
+    useEffect(() => {
+      const interval = setInterval(async () => {
+        const response = await fetch("/api/notifications");
+        const notifications = await response.json();
+        setNotifications(notifications);
+      }, 30000); // Poll every 30 seconds
+
+      return () => clearInterval(interval);
+    }, []);
+    ```
+  </Step>
+
+  <Step title="Mark as read on view">
+    When a user opens the notifications panel, automatically mark all notifications as read:
+
+    ```typescript
+    const markAllAsRead = async () => {
+      for (const notification of unreadNotifications) {
+        await fetch("/api/notifications", {
+          method: "PATCH",
+          body: JSON.stringify({
+            notificationId: notification.id,
+            read: true,
+          }),
+        });
+      }
+    };
+    ```
+  </Step>
+
+  <Step title="Show most recent first">
+    Notifications are already ordered by `createdAt: "desc"` from the API, so the most recent notifications appear first in the list.
+  </Step>
+</Steps>
+
+## Future Enhancements
+
+Potential improvements to the notification system:
+
+- **Email notifications** - Send emails for important events
+- **Push notifications** - Use web push API for real-time updates
+- **Notification preferences** - Allow users to control which notifications they receive
+- **Notification grouping** - Group similar notifications together
+- **Delete notifications** - Allow users to dismiss notifications permanently

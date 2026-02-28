@@ -1,0 +1,391 @@
+---
+title: Database Setup
+description: Set up PostgreSQL database and run Prisma migrations
+---
+
+## Overview
+
+SlugShare uses PostgreSQL as its database and Prisma as the ORM (Object-Relational Mapping) layer. This page covers setting up your database schema and understanding the data models.
+
+<Note>
+Before proceeding, ensure you have completed the **Environment Variables** setup with a valid `DATABASE_URL`.
+</Note>
+
+## Database Schema
+
+SlugShare uses six main database models:
+
+### NextAuth.js Models
+
+These models are required by NextAuth.js for authentication:
+
+- **User** - User accounts with email, name, phone, and profile image
+- **Account** - OAuth account connections (Google, etc.)
+- **Session** - Active user sessions
+- **VerificationToken** - Email verification tokens
+
+### Application Models
+
+These models power SlugShare's core functionality:
+
+- **Points** - User dining points balance (one-to-one with User)
+- **Request** - Point sharing requests between users
+- **Notification** - User notifications for request status updates
+
+## Running Migrations
+
+<Steps>
+  <Step title="Verify database connection">
+    First, ensure your database is accessible:
+    
+    ```bash
+    npx prisma db pull
+    ```
+    
+    If this succeeds, your `DATABASE_URL` is correctly configured.
+  </Step>
+
+  <Step title="Run Prisma migrations">
+    Apply all database migrations to create the schema:
+    
+    ```bash
+    npx prisma migrate dev
+    ```
+    
+    This command will:
+    - Create the database if it doesn't exist
+    - Run all migration files in `prisma/migrations/`
+    - Generate the Prisma Client with TypeScript types
+    - Create all tables with proper relationships and indexes
+    
+    <Note>
+    You may be prompted to name your migration. This is optional for initial setup.
+    </Note>
+  </Step>
+
+  <Step title="Verify schema creation">
+    Check that all tables were created successfully:
+    
+    ```bash
+    npx prisma studio
+    ```
+    
+    This opens Prisma Studio, a visual database browser at `http://localhost:5555`. You should see all six models (User, Account, Session, VerificationToken, Points, Request, Notification).
+  </Step>
+</Steps>
+
+## Database Models in Detail
+
+### User Model
+
+```prisma
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String         @unique
+  emailVerified DateTime?
+  phone         String?
+  image         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  points        Points?
+  requests      Request[]      @relation("Requester")
+  donations     Request[]      @relation("Donor")
+  notifications Notification[]
+}
+```
+
+**Key fields:**
+- `id` - Unique identifier (CUID)
+- `email` - Required, unique email address
+- `points` - One-to-one relation with Points model
+- `requests` - Requests created by this user
+- `donations` - Requests this user has accepted (as donor)
+
+### Points Model
+
+```prisma
+model Points {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+}
+```
+
+**Key fields:**
+- `userId` - Unique foreign key to User
+- `balance` - Current points balance (integer)
+- `updatedAt` - Auto-updated timestamp
+
+<Note>
+Points records are created on-demand using `upsert` when a user first accesses their points balance. New users don't automatically have a Points record.
+</Note>
+
+### Request Model
+
+```prisma
+model Request {
+  id              String   @id @default(cuid())
+  requesterId     String
+  donorId         String?
+  location        String
+  pointsRequested Int
+  status          String   @default("pending")
+  message         String?
+  requester       User     @relation("Requester", fields: [requesterId], references: [id])
+  donor           User?    @relation("Donor", fields: [donorId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+```
+
+**Key fields:**
+- `requesterId` - User creating the request
+- `donorId` - User who accepted the request (nullable)
+- `location` - UCSC dining hall location
+- `pointsRequested` - Number of points requested
+- `status` - `"pending"`, `"accepted"`, or `"declined"`
+- `message` - Optional message from requester
+
+**Valid locations:**
+- Cowell/Stevenson
+- Crown/Merrill
+- Porter/Kresge
+- Rachel Carson/Oakes
+- College Nine/Ten
+
+### Notification Model
+
+```prisma
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+**Key fields:**
+- `type` - Notification type (e.g., `"request_accepted"`, `"request_declined"`)
+- `message` - Notification message text
+- `read` - Whether the user has read the notification
+
+## Common Prisma Commands
+
+<CodeGroup>
+```bash Generate Client
+npx prisma generate
+# Regenerate Prisma Client after schema changes
+# Run this after editing prisma/schema.prisma
+```
+
+```bash Run Migrations
+npx prisma migrate dev
+# Create and apply a new migration
+# Use after modifying the schema
+```
+
+```bash View Database
+npx prisma studio
+# Open visual database browser at localhost:5555
+```
+
+```bash Reset Database
+npx prisma migrate reset
+# ⚠️ Deletes all data and reapplies migrations
+# Use with caution!
+```
+
+```bash Push Schema
+npx prisma db push
+# Push schema changes without creating migration files
+# Useful for rapid prototyping
+```
+</CodeGroup>
+
+## Database Schema Workflow
+
+When you need to modify the database schema:
+
+<Steps>
+  <Step title="Edit schema">
+    Modify `prisma/schema.prisma` with your changes:
+    
+    ```prisma
+    model Points {
+      id        String   @id @default(cuid())
+      userId    String   @unique
+      balance   Int      @default(0)
+      // Add new field:
+      lastUpdated DateTime @default(now())
+      user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+      updatedAt DateTime @updatedAt
+    }
+    ```
+  </Step>
+
+  <Step title="Create migration">
+    Generate and apply the migration:
+    
+    ```bash
+    npx prisma migrate dev --name add_last_updated_to_points
+    ```
+    
+    This creates a migration file in `prisma/migrations/` and applies it to your database.
+  </Step>
+
+  <Step title="Update Prisma Client">
+    Regenerate TypeScript types:
+    
+    ```bash
+    npx prisma generate
+    ```
+    
+    <Note>
+    This happens automatically after `migrate dev`, but you should run it manually if you only changed comments or client configuration.
+    </Note>
+  </Step>
+
+  <Step title="Restart dev server">
+    Restart your Next.js development server to pick up the new types:
+    
+    ```bash
+    npm run dev
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Always run `npx prisma generate` after modifying `prisma/schema.prisma`. TypeScript types won't update until you regenerate the client.
+</Warning>
+
+## Points Transfer System
+
+SlugShare uses Prisma transactions to ensure atomic point transfers. When a user accepts a request:
+
+1. Validate the request status is "pending"
+2. Check the donor has sufficient balance
+3. Execute atomic transaction:
+   - Decrement donor's points
+   - Increment requester's points
+   - Update request status to "accepted"
+   - Set `donorId` on the request
+
+**Example transaction** (from `app/api/requests/[id]/accept/route.ts`):
+
+```typescript
+await prisma.$transaction([
+  prisma.points.update({
+    where: { userId: donorId },
+    data: { balance: { decrement: request.pointsRequested } },
+  }),
+  prisma.points.update({
+    where: { userId: request.requesterId },
+    data: { balance: { increment: request.pointsRequested } },
+  }),
+  prisma.request.update({
+    where: { id: requestId },
+    data: { status: "accepted", donorId },
+  }),
+]);
+```
+
+<Note>
+Transactions ensure that if any operation fails, all changes are rolled back. This prevents partial transfers or data inconsistencies.
+</Note>
+
+## Seeding the Database (Optional)
+
+To add test data for development, you can create a seed script:
+
+```typescript
+// prisma/seed.ts
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+async function main() {
+  // Create test user
+  const user = await prisma.user.create({
+    data: {
+      email: 'test@ucsc.edu',
+      name: 'Test User',
+      points: {
+        create: { balance: 100 },
+      },
+    },
+  });
+  
+  console.log('Created test user:', user);
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+```
+
+Run with:
+
+```bash
+npx tsx prisma/seed.ts
+```
+
+## Troubleshooting
+
+### "Error: P1001: Can't reach database server"
+
+Your database connection failed. Check:
+- PostgreSQL is running
+- `DATABASE_URL` in `.env` is correct
+- Firewall/network allows connections
+- Database credentials are valid
+
+### "Error: P3009: Failed to create database"
+
+The database doesn't exist. Create it manually:
+
+```bash
+psql -U postgres
+CREATE DATABASE slugshare;
+```
+
+Then run migrations again.
+
+### "Error: Unique constraint failed"
+
+You're trying to create duplicate data. Check:
+- Email addresses must be unique
+- Each user can only have one Points record
+- Provider + providerAccountId must be unique for OAuth accounts
+
+### "Prisma Client not generated"
+
+Run:
+
+```bash
+npx prisma generate
+```
+
+This regenerates the Prisma Client and TypeScript types.
+
+## Next Steps
+
+Your database is now set up! You can:
+
+1. **Start the development server**: `npm run dev`
+2. **Access the app**: Open `http://localhost:3000`
+3. **View the database**: Run `npx prisma studio`
+
+Continue to the **Features** section to learn how to use SlugShare's request system, points management, and authentication.
